@@ -13,7 +13,36 @@ static float __fastcall GetUIAspectRatio(int* thisptr, void* Dummy) {
 }
 
 static bool __stdcall FixupRes(int* Width, int* Height, tagRECT* DestRect) {
-    return (float)*Width / *Height < AR16x9;
+    const float RequestedAspectRatio = (float)*Width / *Height;
+
+    // Custom logic: allow wider-than-16:9 aspect ratios.
+    if (RequestedAspectRatio >= AR16x9) return false;
+
+    // Recreation of vanilla game logic: allow only a certain list of aspect ratios, and adjust the rest.
+    static const float SupportedAspectRatios[] = {
+         4.0f /  3.0f,
+        16.0f /  9.0f,
+        16.0f / 10.0f,
+         5.0f /  4.0f,
+    };
+
+    for (const auto SupportedAspectRatio : SupportedAspectRatios)
+        if (std::abs(RequestedAspectRatio - SupportedAspectRatio) < 0.01f)
+            return false;
+
+    // Unsupported aspect ratio; recompute based on 16:9.
+    int NewWidth = (*Width * 9 > *Height * 16) ? (*Height * 16) / 9 : *Width;
+    int NewHeight = (*Width * 9 > *Height * 16) ? *Height : (*Width * 9) / 16;
+
+    DestRect->left = (*Width - NewWidth) / 2;
+    DestRect->top = (*Height - NewHeight) / 2;
+    DestRect->right = DestRect->left + NewWidth;
+    DestRect->bottom = DestRect->top + NewHeight;
+
+    *Width = NewWidth;
+    *Height = NewHeight;
+
+    return true;
 }
 
 void Ultrawide::Install() {
